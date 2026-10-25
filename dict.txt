@@ -1,0 +1,4 @@
+admin
+secret.txt
+testpath1
+testpath2
