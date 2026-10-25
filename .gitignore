@@ -1,0 +1,28 @@
+# 编译产物
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+godirscan
+godirscan.exe
+
+# 测试二进制与覆盖率
+*.test
+*.out
+coverage.txt
+
+# Go workspace
+go.work
+go.work.sum
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# 系统文件
+.DS_Store
+Thumbs.db
+desktop.ini

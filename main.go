@@ -24,6 +24,7 @@ func main() {
 	targetURL := flag.String("u", "", "目标URL (例如: http://example.com)")
 	dictPath := flag.String("w", "dict.txt", "字典文件路径")
 	concurrency := flag.Int("c", 50, "并发数 (默认50)")
+	outputPath := flag.String("o", "", "将结果输出到指定文件")
 	flag.Parse()
 
 	if *targetURL == "" {
@@ -40,6 +41,19 @@ func main() {
 
 	fmt.Printf("[*] 开始对 %s 进行目录爆破 (并发数: %d)...\n", *targetURL, *concurrency)
 
+	// 2. 新增：处理文件输出
+	var resultFile *os.File
+	var fileMutex sync.Mutex // 互斥锁，防止多个协程同时写文件导致乱码
+	if *outputPath != "" {
+		var err error
+		resultFile, err = os.Create(*outputPath)
+		if err != nil {
+			fmt.Printf("创建输出文件失败: %v\n", err)
+			return
+		}
+		defer resultFile.Close()
+	}
+
 	client := &http.Client{
 		Timeout: 3 * time.Second,
 		CheckRedirect: func(req *http.Request, via []*http.Request) error {
@@ -55,7 +69,7 @@ func main() {
 		go func() {
 			defer wg.Done()
 			for path := range jobs {
-				scanPath(client, *targetURL, path)
+				scanPath(client, *targetURL, path, resultFile, &fileMutex)
 			}
 		}()
 	}
@@ -86,7 +100,7 @@ func main() {
 	fmt.Printf("[-] 请求失败/超时: %d\n", failCount)
 }
 
-func scanPath(client *http.Client, targetURL string, path string) {
+func scanPath(client *http.Client, targetURL string, path string, resultFile *os.File, fileMutex *sync.Mutex) {
 	// P1 修复：处理斜杠拼接问题
 	baseURL := strings.TrimRight(targetURL, "/")
 	cleanPath := strings.TrimLeft(path, "/")
@@ -112,6 +126,16 @@ func scanPath(client *http.Client, targetURL string, path string) {
 	switch resp.StatusCode {
 	case 200, 301, 302, 403:
 		atomic.AddInt32(&successCount, 1)
-		fmt.Printf("[+] 发现路径: %-40s | 状态码: %d | 长度: %d\n", fullURL, resp.StatusCode, bodyLen)
+		resultMsg := fmt.Sprintf("[+] 发现路径: %-40s | 状态码: %d | 长度: %d\n", fullURL, resp.StatusCode, bodyLen)
+
+		// 1. 打印到屏幕
+		fmt.Print(resultMsg)
+
+		// 2. 如果用户指定了文件，加锁写入文件
+		if resultFile != nil {
+			fileMutex.Lock()                  // 上锁
+			resultFile.WriteString(resultMsg) // 写文件
+			fileMutex.Unlock()                // 解锁
+		}
 	}
 }
