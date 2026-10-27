@@ -16,20 +16,20 @@ import (
 )
 
 var (
-	successCount int32 // 扫描到的有效路径数
-	failCount    int32 // 请求失败/超时数
-	totalCount   int32 // 总任务数
+	successCount int32
+	failCount    int32
+	totalCount   int32
 )
 
 func main() {
 	targetURL := flag.String("u", "", "目标URL (例如: http://example.com)")
 	dictPath := flag.String("w", "dict.txt", "字典文件路径")
 	concurrency := flag.Int("c", 50, "并发数 (默认50)")
-	outputPath := flag.String("o", "", "将结果输出到指定文件") // 👈 找回 -o 参数
+	outputPath := flag.String("o", "", "将结果输出到指定文件")
 	filterCodesStr := flag.String("fc", "404", "过滤的状态码，用逗号分隔，例如: 404,500")
 	flag.Parse()
 
-	// 👈 解析 -fc 参数
+	// 解析 -fc
 	filterCodes := make(map[int]bool)
 	if *filterCodesStr != "" {
 		for _, codeStr := range strings.Split(*filterCodesStr, ",") {
@@ -54,7 +54,7 @@ func main() {
 
 	fmt.Printf("[*] 开始对 %s 进行目录爆破 (并发数: %d)...\n", *targetURL, *concurrency)
 
-	// 👈 找回 -o 文件输出逻辑
+	// 处理文件输出
 	var resultFile *os.File
 	var fileMutex sync.Mutex
 	if *outputPath != "" {
@@ -82,7 +82,6 @@ func main() {
 		go func() {
 			defer wg.Done()
 			for path := range jobs {
-				// 注意这里传的是 &fileMutex (指针)
 				scanPath(client, *targetURL, path, resultFile, &fileMutex, filterCodes)
 			}
 		}()
@@ -134,7 +133,6 @@ func scanPath(client *http.Client, targetURL string, path string, resultFile *os
 
 	switch resp.StatusCode {
 	case 200, 301, 302, 403:
-		// 👈 找回过滤逻辑：如果命中过滤名单，直接跳过
 		if filterCodes[resp.StatusCode] {
 			return
 		}
@@ -142,10 +140,8 @@ func scanPath(client *http.Client, targetURL string, path string, resultFile *os
 		atomic.AddInt32(&successCount, 1)
 		resultMsg := fmt.Sprintf("[+] 发现路径: %-40s | 状态码: %d | 长度: %d\n", fullURL, resp.StatusCode, bodyLen)
 
-		// 打印到屏幕
 		fmt.Print(resultMsg)
 
-		// 👈 找回写文件逻辑
 		if resultFile != nil {
 			fileMutex.Lock()
 			resultFile.WriteString(resultMsg)
